@@ -1,0 +1,11 @@
+{
+  "files": [],
+  "compilerOptions": {
+    "lib": ["DOM", "DOM.Iterable", "ES2021", "WebWorker"]
+  },
+  "references": [
+    { "path": "./tsconfig.app.json" },
+    { "path": "./tsconfig.node.json" }
+  ]
+}
+

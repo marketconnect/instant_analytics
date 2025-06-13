@@ -1,0 +1,43 @@
+{
+  "name": "frontend",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "eslint .",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@duckdb/duckdb-wasm": "^1.29.0",
+    "@sqlite.org/sqlite-wasm": "^3.50.1-build1",
+    "ag-grid-community": "^33.3.2",
+    "ag-grid-react": "^33.3.2",
+    "apache-arrow": "17.0.0",
+    "idb": "^8.0.3",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-vega": "^7.6.0",
+    "sql.js": "^1.13.0",
+    "vega": "^6.1.2",
+    "vega-lite": "^6.1.0",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.25.0",
+    "@types/react": "^19.1.2",
+    "@types/react-dom": "^19.1.2",
+    "@vitejs/plugin-react": "^4.4.1",
+    "eslint": "^9.25.0",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-react-refresh": "^0.4.19",
+    "globals": "^16.0.0",
+    "typescript": "~5.8.3",
+    "typescript-eslint": "^8.30.1",
+    "vite": "^6.3.5"
+  },
+  "resolutions": {
+    "apache-arrow": "17.0.0"
+  }
+}

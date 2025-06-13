@@ -1,0 +1,11 @@
+name,age,department,salary,hire_date,active
+Alice Johnson,28,Engineering,75000,2021-03-15,true
+Bob Smith,35,Marketing,62000,2020-07-22,true
+Carol Davis,31,Engineering,78000,2019-11-08,true
+David Wilson,29,Sales,58000,2022-01-12,true
+Eva Brown,42,HR,65000,2018-05-30,false
+Frank Miller,26,Engineering,71000,2023-02-18,true
+Grace Lee,33,Marketing,59000,2021-09-03,true
+Henry Taylor,38,Sales,63000,2020-12-14,true
+Ivy Chen,24,Engineering,69000,2023-06-20,true
+Jack Anderson,45,Management,95000,2017-04-11,true 
