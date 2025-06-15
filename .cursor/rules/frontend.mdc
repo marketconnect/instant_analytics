@@ -1,0 +1,59 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+Of course! Here is the English translation of the cursor rules, maintaining the professional and pragmatic tone of the original article.
+
+---
+
+### **Cursor Rules from "Clean Architecture in React"**
+
+These rules will help you structure React applications to be flexible, maintainable, and resilient to change.
+
+#### **1. Design Principles & API**
+
+*   **Design from the interface first.** Let the needs of the UI drive the API's structure, not the other way around. This prevents overfetching and client-side complexity.
+*   **The backend decides *what* to return; the frontend decides *how* to render it.** Maintain a clear separation of concerns. Don't shift decision-making business logic to the client.
+*   **Avoid technical purism when it harms the UX.** A perfectly RESTful API with three sequential requests is worse than one pragmatic endpoint that returns all the necessary data for a page at once.
+*   **Don't build on assumptions.** Keep asking questions about requirements until the ambiguity is resolved. This prevents critical design flaws at an early stage.
+
+#### **2. Component Architecture**
+
+*   **First, make it work. Then, make it right.** Start with a single large component (a "first draft") to get functionality working quickly, then refactor.
+*   **Encapsulate domain logic and data fetching in custom hooks (`use...`).** This is your primary tool for creating clean components.
+*   **A component should be "clean": it receives data and props, and returns markup.** It shouldn't know where the data comes from (`fetch`, `axios`, `localStorage`), how it's cached, or how errors are handled.
+*   **Strive for "deep" modules.** A good abstraction (like a custom hook) has a small, simple interface but hides significant complexity underneath.
+*   **The component handles the UI event (e.g., a click), but delegates the business logic to the hook.** A component knows a button was clicked (`onSubmit`), but it doesn't know what happens next (API call, cache invalidation).
+
+#### **3. Data Handling**
+
+*   **Isolate the HTTP layer.** Create separate client files (e.g., `prompt-client.ts`) for interacting with the API. Components and hooks should not see `fetch` or `axios` directly.
+*   **Validate data at the "trust boundaries."** Always verify API responses using schema validation libraries (like Zod). Never trust external data, even if you're using TypeScript.
+*   **Format data in the business logic layer (the custom hook), not in the component.** If you need to turn a date into a "5 minutes ago" string, do it inside `usePrompt` (ideally with `useQuery`'s `select` option), not in the JSX.
+*   **Use data-fetching libraries (like SWR or React Query).** They eliminate 90% of the boilerplate code for managing loading states, errors, and caching. Don't reinvent this wheel.
+
+#### **4. Code Quality & Refactoring**
+
+*   **Extract "magic strings" into constants.** URLs, API endpoints, and cache keys (`queryKey`) should be stored in dedicated objects or files.
+*   **Avoid nested ternary operators in JSX.** If you see `condition ? (...) : (...)` in your markup, it's a signal that the component should be broken down or that you should use a guard clause.
+*   **Use "guard clauses" to simplify logic.** Instead of `if/else`, handle error or alternate states first, leaving the main ("golden") path at the top level of indentation.
+
+```javascript
+// Bad
+function Component({ data }) {
+  if (data) {
+    // ... a lot of logic
+  } else {
+    return <Loading />;
+  }
+}
+
+// Good (Guard Clause)
+function Component({ data }) {
+  if (!data) {
+    return <Loading />;
+  }
+  // ... a lot of logic at the top level
+}
+```

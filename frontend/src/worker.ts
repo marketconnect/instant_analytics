@@ -36,6 +36,7 @@ console.log('WASM инициализирован, Worker готов к рабо�
 let idbConnection: IDBPDatabase | null = null;
 let isDirty = false;
 let autoSaveInterval: NodeJS.Timeout | null = null;
+let tableReady = false; // Флаг готовности таблицы для SQL запросов
 
 // 1. Инициализация IndexedDB
 async function initPersistence() {
@@ -115,6 +116,11 @@ async function exportDatabase(): Promise<Uint8Array | null> {
     const tablesRes = await conn.query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'");
     const tables = tablesRes.toArray() as any[];
     
+    console.log(`📋 Найдено таблиц для экспорта: ${tables.length}`);
+    if (tables.length > 0) {
+      console.log(`📋 Список таблиц:`, tables.map(t => t.name));
+    }
+    
     if (tables.length === 0) {
       console.log('📊 Нет таблиц для экспорта');
       await conn.close();
@@ -131,15 +137,25 @@ async function exportDatabase(): Promise<Uint8Array | null> {
       // Получаем схему таблицы
       const schemaRes = await conn.query(`SELECT sql FROM sqlite_master WHERE name='${tableName}'`);
       const schema = schemaRes.toArray()[0] as any;
+      console.log(`📋 Схема таблицы ${tableName}:`, schema?.sql?.substring(0, 100));
+      
       sqlDump += `-- Table: ${tableName}\n`;
       sqlDump += schema.sql + ';\n\n';
       
       // Получаем данные
-      const dataRes = await conn.query(`SELECT * FROM "${tableName}" LIMIT 100000`); // Лимит для безопасности
+      const dataRes = await conn.query(`SELECT * FROM "${tableName}"`); // Убираем LIMIT для полного экспорта
       const rows = dataRes.toArray();
+      
+      console.log(`📋 Строк данных в таблице ${tableName}: ${rows.length}`);
       
       if (rows.length > 0) {
         const columns = Object.keys(rows[0]);
+        console.log(`📋 Колонки таблицы ${tableName}:`, columns);
+        console.log(`📋 Первая строка данных:`, rows[0]);
+        if (rows.length > 1) {
+          console.log(`📋 Вторая строка данных:`, rows[1]);
+        }
+        
         sqlDump += `-- Data for table: ${tableName}\n`;
         sqlDump += `INSERT INTO "${tableName}" ("${columns.join('", "')}") VALUES\n`;
         
@@ -160,6 +176,10 @@ async function exportDatabase(): Promise<Uint8Array | null> {
     }
     
     await conn.close();
+    
+    console.log(`📄 Итоговый размер SQL дампа: ${sqlDump.length} символов`);
+    console.log(`📄 Первые 300 символов дампа:`, sqlDump.substring(0, 300));
+    console.log(`📄 Последние 200 символов дампа:`, sqlDump.substring(Math.max(0, sqlDump.length - 200)));
     
     // Конвертируем SQL в Uint8Array
     const encoder = new TextEncoder();
@@ -337,21 +357,99 @@ async function loadPersistedDatabase() {
         try {
           const sqlContent = decoder.decode(dbFile);
           
-          // Разбиваем SQL на отдельные команды
-          const sqlCommands = sqlContent
-            .split('\n')
-            .filter(line => line.trim() && !line.trim().startsWith('--'))
-            .join('\n')
-            .split(';')
-            .filter(cmd => cmd.trim());
+          console.log(`📄 Размер SQL содержимого: ${sqlContent.length} символов`);
+          console.log(`📄 Первые 500 символов SQL:`, sqlContent.substring(0, 500));
+          console.log(`📄 Последние 200 символов SQL:`, sqlContent.substring(Math.max(0, sqlContent.length - 200)));
           
-          for (const command of sqlCommands) {
-            const trimmedCommand = command.trim();
-            if (trimmedCommand) {
+          // Улучшенный разбор SQL команд
+          // Разбиваем по точкам с запятой, но сохраняем многострочные команды
+          const sqlCommands = sqlContent
+            .split(';')
+            .map(cmd => cmd.trim())
+            .filter(cmd => {
+              // Убираем пустые команды
+              if (!cmd) return false;
+              
+              // Убираем команды, состоящие только из комментариев
+              const lines = cmd.split('\n').map(line => line.trim());
+              const nonCommentLines = lines.filter(line => line && !line.startsWith('--'));
+              
+              return nonCommentLines.length > 0;
+            });
+          
+          console.log(`📋 Найдено ${sqlCommands.length} SQL команд для выполнения`);
+          
+          if (sqlCommands.length > 0) {
+            console.log(`📋 Первая команда: ${sqlCommands[0].substring(0, 100)}...`);
+            if (sqlCommands.length > 1) {
+              console.log(`📋 Вторая команда: ${sqlCommands[1].substring(0, 100)}...`);
+            }
+          }
+          
+          for (let i = 0; i < sqlCommands.length; i++) {
+            const command = sqlCommands[i].trim();
+            if (command) {
               try {
-                await conn.query(trimmedCommand);
+                // Очищаем команду от комментариев, оставляя только SQL
+                const cleanCommand = command
+                  .split('\n')
+                  .map(line => line.trim())
+                  .filter(line => line && !line.startsWith('--'))
+                  .join('\n')
+                  .trim();
+                
+                if (cleanCommand) {
+                  console.log(`📝 Выполняем команду ${i + 1}/${sqlCommands.length}: ${cleanCommand.substring(0, 50)}...`);
+                  await conn.query(cleanCommand);
+                  console.log(`✅ Команда ${i + 1} выполнена успешно`);
+                  
+                  // Дополнительная диагностика: проверяем количество строк после каждой команды
+                  if (cleanCommand.toUpperCase().includes('CREATE TABLE')) {
+                    try {
+                      const checkRes = await conn.query("SELECT name FROM sqlite_master WHERE type='table' AND name='t'");
+                      const tables = checkRes.toArray();
+                      console.log(`🔍 После CREATE TABLE найдено таблиц 't': ${tables.length}`);
+                    } catch (e) {
+                      console.log('🔍 Не удалось проверить таблицы после CREATE:', e);
+                    }
+                  } else if (cleanCommand.toUpperCase().includes('INSERT INTO')) {
+                    try {
+                      console.log(`🔍 Полная INSERT команда (первые 1000 символов):`, cleanCommand.substring(0, 1000));
+                      console.log(`🔍 Полная INSERT команда (последние 500 символов):`, cleanCommand.substring(Math.max(0, cleanCommand.length - 500)));
+                      
+                      const countRes = await conn.query("SELECT COUNT(*) AS cnt FROM t");
+                      const count = countRes.getChild(0)?.get(0) ?? 0;
+                      console.log(`🔍 После INSERT количество строк в таблице 't': ${count}`);
+                      
+                      // Дополнительная проверка: попробуем выполнить простой SELECT
+                      try {
+                        const selectRes = await conn.query("SELECT * FROM t LIMIT 3");
+                        const rows = selectRes.toArray();
+                        console.log(`🔍 Первые строки из таблицы после INSERT:`, rows);
+                      } catch (selectError) {
+                        console.log(`🔍 Ошибка при SELECT после INSERT:`, selectError);
+                      }
+                      
+                      // Тестовая вставка простых данных
+                      try {
+                        console.log(`🧪 Тестируем простую INSERT команду...`);
+                        await conn.query(`INSERT INTO t (column_1, "Номер_поставки") VALUES ('test1', 'test2')`);
+                        const testCountRes = await conn.query("SELECT COUNT(*) AS cnt FROM t");
+                        const testCount = testCountRes.getChild(0)?.get(0) ?? 0;
+                        console.log(`🧪 После тестовой INSERT количество строк: ${testCount}`);
+                      } catch (testError) {
+                        console.log(`🧪 Ошибка тестовой INSERT:`, testError);
+                      }
+                    } catch (e) {
+                      console.log('🔍 Не удалось проверить количество строк после INSERT:', e);
+                    }
+                  }
+                } else {
+                  console.log(`⏭️ Команда ${i + 1} пуста после очистки от комментариев, пропускаем`);
+                }
               } catch (cmdError) {
-                console.warn('⚠️ Ошибка выполнения SQL команды:', cmdError);
+                console.warn(`⚠️ Ошибка выполнения SQL команды ${i + 1}:`, cmdError);
+                console.warn(`Команда: ${command.substring(0, 200)}...`);
               }
             }
           }
@@ -361,18 +459,45 @@ async function loadPersistedDatabase() {
           const tables = tablesRes.toArray();
           
           if (tables.length > 0) {
-            const rowsRes = await conn.query("SELECT COUNT(*) AS cnt FROM t");
-            const rows = rowsRes.getChild(0)?.get(0) ?? 0;
-            
-            console.log(`✅ Восстановлена таблица 't' с ${rows} строками из SQL дампа`);
-            tableReady = true;
-            
-            // Уведомляем основной поток о восстановлении данных
-            self.postMessage({ 
-              restored: true, 
-              rows, 
-              message: `Данные восстановлены из локального хранилища: ${rows} строк`
-            });
+            // Используем SELECT для подсчета строк вместо COUNT(*), так как COUNT работает неправильно
+            try {
+              const allRowsRes = await conn.query("SELECT * FROM t");
+              const allRows = allRowsRes.toArray();
+              const rows = allRows.length;
+              
+              console.log(`✅ Восстановлена таблица 't' с ${rows} строками из SQL дампа`);
+              console.log(`🔍 Первые 2 строки восстановленных данных:`, allRows.slice(0, 2));
+              
+              tableReady = true;
+              
+              // Уведомляем основной поток о восстановлении данных
+              self.postMessage({ 
+                restored: true, 
+                rows, 
+                message: `Данные восстановлены из локального хранилища: ${rows} строк`
+              });
+            } catch (selectError) {
+              console.error('❌ Ошибка при получении данных из таблицы:', selectError);
+              
+              // Fallback: пробуем COUNT еще раз
+              try {
+                const rowsRes = await conn.query("SELECT COUNT(*) AS cnt FROM t");
+                const rows = rowsRes.getChild(0)?.get(0) ?? 0;
+                
+                console.log(`✅ Восстановлена таблица 't' с ${rows} строками из SQL дампа (через COUNT)`);
+                tableReady = true;
+                
+                self.postMessage({ 
+                  restored: true, 
+                  rows, 
+                  message: `Данные восстановлены из локального хранилища: ${rows} строк`
+                });
+              } catch (countError) {
+                console.error('❌ Ошибка при подсчете строк:', countError);
+              }
+            }
+          } else {
+            console.log('⚠️ Таблица "t" не найдена после восстановления');
           }
           
         } catch (sqlError) {
@@ -505,9 +630,7 @@ self.addEventListener('beforeunload', async () => {
 // Инициализируем персистентность
 await initPersistence();
 
-let tableReady = false;
-
-self.onmessage = (e: MessageEvent<ArrayBuffer | { sql: string } | { fileData: ArrayBuffer, fileName: string } | { action: string }>) => {
+self.onmessage = (e: MessageEvent<ArrayBuffer | { sql: string } | { fileData: ArrayBuffer, fileName: string } | { action: string } | { exportParquet: { sql: string, fileName: string } } | { exportExcel: { sql: string, fileName: string } } | { exportCsv: { sql: string, fileName: string } } | { exportJson: { sql: string, fileName: string } }>) => {
   console.log('Worker получил сообщение:', e.data);
   
   if (e.data instanceof ArrayBuffer) {
@@ -516,8 +639,19 @@ self.onmessage = (e: MessageEvent<ArrayBuffer | { sql: string } | { fileData: Ar
   } else if ('fileData' in e.data) {
     console.log(`Получен файл для импорта: ${e.data.fileName}, размер: ${e.data.fileData.byteLength}`);
     const fileName = e.data.fileName;
-    const baseName = fileName.replace(/\.[^/.]+$/, ""); // убираем расширение
-    importFileByName(baseName, fileName, new Uint8Array(e.data.fileData));
+    importFileByName(fileName, new Uint8Array(e.data.fileData));
+  } else if ('exportParquet' in e.data) {
+    console.log('Получена команда экспорта в Parquet:', e.data.exportParquet.fileName);
+    exportToParquet(e.data.exportParquet.sql, e.data.exportParquet.fileName);
+  } else if ('exportExcel' in e.data) {
+    console.log('Получена команда экспорта в Excel:', e.data.exportExcel.fileName);
+    exportToExcel(e.data.exportExcel.sql, e.data.exportExcel.fileName);
+  } else if ('exportCsv' in e.data) {
+    console.log('Получена команда экспорта в CSV:', e.data.exportCsv.fileName);
+    exportToCsv(e.data.exportCsv.sql, e.data.exportCsv.fileName);
+  } else if ('exportJson' in e.data) {
+    console.log('Получена команда экспорта в JSON:', e.data.exportJson.fileName);
+    exportToJson(e.data.exportJson.sql, e.data.exportJson.fileName);
   } else if ('action' in e.data) {
     // Обработка команд персистентности
     if (e.data.action === 'save') {
@@ -535,7 +669,7 @@ self.onmessage = (e: MessageEvent<ArrayBuffer | { sql: string } | { fileData: Ar
   }
 };
 
-async function importFileByName(baseName: string, fileName: string, buf: Uint8Array) {
+async function importFileByName(fileName: string, buf: Uint8Array) {
   console.log(`Начинаем импорт файла: ${fileName}, размер: ${buf.length} байт`);
   
   try {
@@ -547,6 +681,9 @@ async function importFileByName(baseName: string, fileName: string, buf: Uint8Ar
     } else if (lowerName.endsWith('.parquet')) {
       console.log('Определен формат по расширению: Parquet');
       await importParquet(fileName, buf);
+    } else if (lowerName.endsWith('.json')) {
+      console.log('Определен формат по расширению: JSON');
+      await importJson(fileName, buf);
     } else {
       console.log('Определен формат по расширению: CSV (по умолчанию)');
       await importCSV(fileName, buf);
@@ -642,6 +779,105 @@ async function importParquet(name: string, buf: Uint8Array) {
     isDirty = true;
   } catch (error) {
     console.error('Ошибка при импорте Parquet:', error);
+    self.postMessage({ error: error instanceof Error ? error.message : String(error) });
+  }
+}
+
+async function importJson(name: string, buf: Uint8Array) {
+  console.log(`Начинаем импорт JSON: ${name}, размер: ${buf.length} байт`);
+  
+  try {
+    await db.registerFileBuffer(name, buf);
+    console.log('JSON файл зарегистрирован в DuckDB');
+    
+    const conn = await db.connect();
+    console.log('Подключение к БД создано');
+    
+    // Пробуем импортировать как JSON Lines (NDJSON) или как массив JSON
+    try {
+      await conn.query(`
+        CREATE OR REPLACE TABLE t AS
+        SELECT * FROM read_json_auto('${name}')
+      `);
+      console.log('Таблица создана из JSON через read_json_auto');
+    } catch (autoError) {
+      console.log('read_json_auto не сработал, пробуем как обычный JSON массив:', autoError);
+      
+      // Fallback: читаем как текст и парсим вручную
+      const decoder = new TextDecoder();
+      const jsonText = decoder.decode(buf);
+      
+      let jsonData;
+      try {
+        jsonData = JSON.parse(jsonText);
+      } catch (parseError) {
+        throw new Error(`Не удалось распарсить JSON файл: ${parseError}`);
+      }
+      
+      // Если это не массив, оборачиваем в массив
+      if (!Array.isArray(jsonData)) {
+        jsonData = [jsonData];
+      }
+      
+      if (jsonData.length === 0) {
+        throw new Error('JSON файл не содержит данных');
+      }
+      
+      // Получаем колонки из первого объекта
+      const firstRow = jsonData[0];
+      if (typeof firstRow !== 'object' || firstRow === null) {
+        throw new Error('JSON должен содержать массив объектов');
+      }
+      
+      const columns = Object.keys(firstRow);
+      console.log('Колонки из JSON:', columns);
+      
+      // Создаем таблицу с VARCHAR колонками
+      const columnDefs = columns.map(col => `"${col}" VARCHAR`).join(', ');
+      await conn.query(`CREATE OR REPLACE TABLE t (${columnDefs})`);
+      
+      // Вставляем данные батчами
+      const batchSize = 1000;
+      for (let i = 0; i < jsonData.length; i += batchSize) {
+        const batch = jsonData.slice(i, i + batchSize);
+        
+        const valueStrings = batch.map(row => {
+          const values = columns.map(col => {
+            const value = row[col];
+            if (value === undefined || value === null) {
+              return 'NULL';
+            }
+            if (typeof value === 'object') {
+              return `'${JSON.stringify(value).replace(/'/g, "''")}'`;
+            }
+            return `'${String(value).replace(/'/g, "''")}'`;
+          });
+          return `(${values.join(', ')})`;
+        });
+        
+        if (valueStrings.length > 0) {
+          const sql = `INSERT INTO t VALUES ${valueStrings.join(', ')}`;
+          await conn.query(sql);
+        }
+      }
+      
+      console.log('JSON данные вставлены через fallback метод');
+    }
+    
+    const rowsRes = await conn.query('SELECT COUNT(*) AS cnt FROM t');
+    console.log('Подсчет строк выполнен:', rowsRes);
+    
+    const rows = rowsRes.getChild(0)?.get(0) ?? 0;
+    console.log('Количество строк в JSON:', rows);
+
+    tableReady = true;
+    console.log('Отправляем результат импорта JSON');
+    self.postMessage({ imported: true, rows, type: 'JSON' });
+    
+    // Отмечаем, что данные изменились
+    isDirty = true;
+  } catch (error) {
+    console.error('Ошибка при импорте JSON:', error);
     self.postMessage({ error: error instanceof Error ? error.message : String(error) });
   }
 }
@@ -842,6 +1078,399 @@ async function runSQL(sql: string) {
     self.postMessage({ 
       error: errorMessage,
       sql: sql 
+    });
+  }
+}
+
+// Функция экспорта в Parquet через DuckDB
+async function exportToParquet(sql: string, fileName: string) {
+  console.log(`Начинаем экспорт в Parquet: ${fileName}, SQL: ${sql}`);
+  
+  try {
+    const conn = await db.connect();
+    console.log('Подключение для экспорта в Parquet создано');
+    
+    const parquetFileName = `${fileName}.parquet`;
+    
+    // Очищаем SQL от лишних пробелов и точек с запятой
+    const cleanSQL = sql.trim().replace(/;+$/, '');
+    console.log('Очищенный SQL:', cleanSQL);
+    
+    // Проверяем количество строк напрямую из исходного запроса
+    const testRes = await conn.query(cleanSQL);
+    const rowCount = testRes.numRows;
+    console.log(`Количество строк для экспорта: ${rowCount}`);
+    
+    if (rowCount === 0) {
+      await conn.close();
+      
+      self.postMessage({ 
+        parquetExportError: 'Нет данных для экспорта',
+        fileName: fileName
+      });
+      return;
+    }
+    
+    // Экспортируем в Parquet напрямую из SQL запроса (как Excel)
+    console.log('Выполняем COPY в Parquet формат...');
+    await conn.query(`COPY (${cleanSQL}) TO '${parquetFileName}' (FORMAT parquet)`);
+    console.log('Parquet файл создан через DuckDB COPY');
+    
+    // Читаем созданный файл
+    const parquetBuffer = await db.copyFileToBuffer(parquetFileName);
+    console.log(`Parquet файл прочитан: ${parquetBuffer.length} байт`);
+    
+    // Удаляем временные файлы
+    db.dropFile(parquetFileName);
+    await conn.close();
+    
+    // Отправляем Parquet файл обратно
+    self.postMessage({ 
+      parquetExported: true,
+      fileName: fileName,
+      data: parquetBuffer,
+      message: `Parquet файл создан успешно (${parquetBuffer.length} байт, ${rowCount} строк)`
+    }, { transfer: [parquetBuffer.buffer] });
+    
+  } catch (error) {
+    console.error('Ошибка экспорта в Parquet:', error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    
+    // Если встроенный экспорт не работает, используем fallback
+    console.log('Встроенный Parquet экспорт не поддерживается, используем fallback через JSON');
+    
+    // Fallback: получаем данные через SQL и создаем JSON
+    try {
+      const conn = await db.connect();
+      const res = await conn.query(sql.trim().replace(/;+$/, ''));
+      await conn.close();
+      
+      const data = res.toArray();
+      
+      if (data.length === 0) {
+        self.postMessage({ 
+          parquetExportError: 'Нет данных для экспорта',
+          fileName: fileName
+        });
+        return;
+      }
+      
+      const headers = Object.keys(data[0]);
+      const parquetStructure = {
+        metadata: {
+          version: '1.0',
+          createdBy: 'instant-analytics-duckdb',
+          numRows: data.length,
+          format: 'parquet-json-fallback',
+          note: 'This is a JSON representation of Parquet data. DuckDB Parquet export failed.',
+          schema: headers.map(header => {
+            const sampleValue = data.find(row => row[header] != null)?.[header];
+            let type = 'string';
+            
+            if (typeof sampleValue === 'number') {
+              type = Number.isInteger(sampleValue) ? 'int64' : 'double';
+            } else if (typeof sampleValue === 'boolean') {
+              type = 'boolean';
+            } else if (sampleValue instanceof Date) {
+              type = 'timestamp';
+            }
+            
+            return { name: header, type };
+          })
+        },
+        data: data
+      };
+      
+      const jsonContent = JSON.stringify(parquetStructure, null, 2);
+      const jsonBuffer = new TextEncoder().encode(jsonContent);
+      
+      console.log(`JSON fallback файл создан: ${jsonBuffer.length} байт`);
+      
+      // Отправляем JSON файл как fallback
+      self.postMessage({ 
+        parquetExported: true,
+        fileName: fileName,
+        data: jsonBuffer,
+        message: `Parquet экспорт через JSON fallback (${jsonBuffer.length} байт)`
+      }, { transfer: [jsonBuffer.buffer] });
+      
+    } catch (fallbackError) {
+      console.error('Ошибка fallback экспорта в Parquet:', fallbackError);
+      self.postMessage({ 
+        parquetExportError: errorMessage,
+        fileName: fileName
+      });
+    }
+  }
+}
+
+// Функция экспорта в CSV через DuckDB
+async function exportToCsv(sql: string, fileName: string) {
+  console.log(`Начинаем экспорт в CSV: ${fileName}, SQL: ${sql}`);
+  
+  try {
+    const conn = await db.connect();
+    console.log('Подключение для экспорта в CSV создано');
+    
+    const csvFileName = `${fileName}.csv`;
+    
+    // Очищаем SQL от лишних пробелов и точек с запятой
+    const cleanSQL = sql.trim().replace(/;+$/, '');
+    console.log('Очищенный SQL:', cleanSQL);
+    
+    // Проверяем количество строк напрямую из исходного запроса
+    const testRes = await conn.query(cleanSQL);
+    const rowCount = testRes.numRows;
+    console.log(`Количество строк для экспорта: ${rowCount}`);
+    
+    if (rowCount === 0) {
+      await conn.close();
+      
+      self.postMessage({ 
+        csvExportError: 'Нет данных для экспорта',
+        fileName: fileName
+      });
+      return;
+    }
+    
+    // Экспортируем в CSV напрямую из SQL запроса
+    console.log('Выполняем COPY в CSV формат...');
+    await conn.query(`COPY (${cleanSQL}) TO '${csvFileName}' (HEADER, DELIMITER ',')`);
+    console.log('CSV файл создан через DuckDB COPY');
+    
+    // Читаем созданный файл
+    const csvBuffer = await db.copyFileToBuffer(csvFileName);
+    console.log(`CSV файл прочитан: ${csvBuffer.length} байт`);
+    
+    // Удаляем временные файлы
+    db.dropFile(csvFileName);
+    await conn.close();
+    
+    // Отправляем CSV файл обратно
+    self.postMessage({ 
+      csvExported: true,
+      fileName: fileName,
+      data: csvBuffer,
+      message: `CSV файл создан успешно (${csvBuffer.length} байт, ${rowCount} строк)`
+    }, { transfer: [csvBuffer.buffer] });
+    
+  } catch (error) {
+    console.error('Ошибка экспорта в CSV:', error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    self.postMessage({ 
+      csvExportError: errorMessage,
+      fileName: fileName
+    });
+  }
+}
+
+// Функция экспорта в JSON через DuckDB
+async function exportToJson(sql: string, fileName: string) {
+  console.log(`Начинаем экспорт в JSON: ${fileName}, SQL: ${sql}`);
+  
+  try {
+    const conn = await db.connect();
+    console.log('Подключение для экспорта в JSON создано');
+    
+    const jsonFileName = `${fileName}.json`;
+    
+    // Очищаем SQL от лишних пробелов и точек с запятой
+    const cleanSQL = sql.trim().replace(/;+$/, '');
+    console.log('Очищенный SQL:', cleanSQL);
+    
+    // Проверяем количество строк напрямую из исходного запроса
+    const testRes = await conn.query(cleanSQL);
+    const rowCount = testRes.numRows;
+    console.log(`Количество строк для экспорта: ${rowCount}`);
+    
+    if (rowCount === 0) {
+      await conn.close();
+      
+      self.postMessage({ 
+        jsonExportError: 'Нет данных для экспорта',
+        fileName: fileName
+      });
+      return;
+    }
+    
+    // Экспортируем в JSON напрямую из SQL запроса
+    console.log('Выполняем COPY в JSON формат...');
+    await conn.query(`COPY (${cleanSQL}) TO '${jsonFileName}' (ARRAY)`);
+    console.log('JSON файл создан через DuckDB COPY');
+    
+    // Читаем созданный файл
+    const jsonBuffer = await db.copyFileToBuffer(jsonFileName);
+    console.log(`JSON файл прочитан: ${jsonBuffer.length} байт`);
+    
+    // Удаляем временные файлы
+    db.dropFile(jsonFileName);
+    await conn.close();
+    
+    // Отправляем JSON файл обратно
+    self.postMessage({ 
+      jsonExported: true,
+      fileName: fileName,
+      data: jsonBuffer,
+      message: `JSON файл создан успешно (${jsonBuffer.length} байт, ${rowCount} строк)`
+    }, { transfer: [jsonBuffer.buffer] });
+    
+  } catch (error) {
+    console.error('Ошибка экспорта в JSON:', error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    
+    // Fallback: получаем данные через SQL и создаем JSON
+    console.log('Встроенный JSON экспорт не поддерживается, используем fallback');
+    
+    try {
+      const conn = await db.connect();
+      const res = await conn.query(sql.trim().replace(/;+$/, ''));
+      await conn.close();
+      
+      const data = res.toArray();
+      
+      if (data.length === 0) {
+        self.postMessage({ 
+          jsonExportError: 'Нет данных для экспорта',
+          fileName: fileName
+        });
+        return;
+      }
+      
+      const jsonContent = JSON.stringify(data, null, 2);
+      const jsonBuffer = new TextEncoder().encode(jsonContent);
+      
+      console.log(`JSON fallback файл создан: ${jsonBuffer.length} байт`);
+      
+      // Отправляем JSON файл как fallback
+      self.postMessage({ 
+        jsonExported: true,
+        fileName: fileName,
+        data: jsonBuffer,
+        message: `JSON файл создан через fallback (${jsonBuffer.length} байт)`
+      }, { transfer: [jsonBuffer.buffer] });
+      
+    } catch (fallbackError) {
+      console.error('Ошибка fallback экспорта в JSON:', fallbackError);
+      self.postMessage({ 
+        jsonExportError: errorMessage,
+        fileName: fileName
+      });
+    }
+  }
+}
+
+async function exportToExcel(sql: string, fileName: string) {
+  console.log(`Начинаем экспорт в Excel: ${fileName}, SQL: ${sql}`);
+  
+  try {
+    const conn = await db.connect();
+    console.log('Подключение для экспорта в Excel создано');
+    
+    const excelFileName = `${fileName}.xlsx`;
+    
+    // Очищаем SQL от лишних пробелов и точек с запятой
+    const cleanSQL = sql.trim().replace(/;+$/, '');
+    console.log('Очищенный SQL:', cleanSQL);
+    
+    // Проверяем количество строк напрямую из исходного запроса
+    const testRes = await conn.query(cleanSQL);
+    const rowCount = testRes.numRows;
+    console.log(`Количество строк для экспорта: ${rowCount}`);
+    
+    if (rowCount === 0) {
+      await conn.close();
+      
+      self.postMessage({ 
+        excelExportError: 'Нет данных для экспорта',
+        fileName: fileName
+      });
+      return;
+    }
+    
+    // Экспортируем в Excel напрямую из SQL запроса (без временной таблицы)
+    console.log('Выполняем COPY в Excel формат...');
+    await conn.query(`COPY (${cleanSQL}) TO '${excelFileName}' WITH (FORMAT xlsx, HEADER true)`);
+    console.log('Excel файл создан через DuckDB COPY');
+    
+    // Читаем созданный файл
+    const excelBuffer = await db.copyFileToBuffer(excelFileName);
+    console.log(`Excel файл прочитан: ${excelBuffer.length} байт`);
+    
+    // Удаляем временные файлы
+    db.dropFile(excelFileName);
+    await conn.close();
+    
+    // Отправляем Excel файл обратно
+    self.postMessage({ 
+      excelExported: true,
+      fileName: fileName,
+      data: excelBuffer,
+      message: `Excel файл создан успешно (${excelBuffer.length} байт, ${rowCount} строк)`
+    }, { transfer: [excelBuffer.buffer] });
+    
+  } catch (error) {
+    console.error('Ошибка экспорта в Excel:', error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    
+    // Если встроенный экспорт не работает, используем fallback через SheetJS
+    if (errorMessage.includes('xlsx') || errorMessage.includes('FORMAT')) {
+      console.log('Встроенный Excel экспорт не поддерживается, используем fallback через SheetJS');
+      await exportToExcelFallback(sql, fileName);
+    } else {
+      self.postMessage({ 
+        excelExportError: errorMessage,
+        fileName: fileName
+      });
+    }
+  }
+}
+
+async function exportToExcelFallback(sql: string, fileName: string) {
+  console.log(`Fallback экспорт в Excel через SheetJS: ${fileName}`);
+  
+  try {
+    const conn = await db.connect();
+    
+    // Очищаем SQL
+    const cleanSQL = sql.trim().replace(/;+$/, '');
+    const res = await conn.query(cleanSQL);
+    await conn.close();
+    
+    if (res.numRows === 0) {
+      self.postMessage({ 
+        excelExportError: 'Нет данных для экспорта',
+        fileName: fileName
+      });
+      return;
+    }
+    
+    // Конвертируем Arrow результат в массив объектов
+    const data = res.toArray();
+    console.log(`Данные для экспорта: ${data.length} строк`);
+    
+    // Создаем Excel workbook через SheetJS
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Sheet1');
+    
+    // Генерируем Excel файл
+    const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+    console.log(`Excel файл создан через SheetJS: ${excelBuffer.length} байт`);
+    
+    // Отправляем Excel файл обратно
+    self.postMessage({ 
+      excelExported: true,
+      fileName: fileName,
+      data: new Uint8Array(excelBuffer),
+      message: `Excel файл создан через SheetJS (${excelBuffer.length} байт, ${data.length} строк)`
+    }, { transfer: [new Uint8Array(excelBuffer).buffer] });
+    
+  } catch (error) {
+    console.error('Ошибка fallback экспорта в Excel:', error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    self.postMessage({ 
+      excelExportError: errorMessage,
+      fileName: fileName
     });
   }
 }
