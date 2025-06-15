@@ -1,6 +1,7 @@
 import React from 'react';
 import { useLanguage } from '../i18n/LanguageContext';
 import type { Language } from '../i18n/translations';
+import styles from './SettingsPage.module.css';
 
 const SettingsPage: React.FC = () => {
   const { language, setLanguage, t } = useLanguage();
@@ -10,21 +11,16 @@ const SettingsPage: React.FC = () => {
   };
 
   return (
-    <div className="page">
-      <div className="card">
+    <div className={styles.page}>
+      <div className={styles.card}>
         <h3>{t('language')}</h3>
         <p>{t('settingsDescription')}</p>
         
-        <div style={{ marginTop: '20px' }}>
-          <label style={{ 
-            display: 'block', 
-            marginBottom: '8px', 
-            fontWeight: '500',
-            color: 'var(--color-base-600)'
-          }}>
+        <div className={styles.languageSection}>
+          <label className={styles.label}>
             {t('language')}:
           </label>
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div className={styles.buttonGroup}>
             <button
               className={`btn ${language === 'ru' ? 'btn-primary' : 'btn-info'}`}
               onClick={() => handleLanguageChange('ru')}

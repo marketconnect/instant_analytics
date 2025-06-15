@@ -1,5 +1,6 @@
 import React from 'react';
 import type { ImportStatus } from '../../types/analytics';
+import styles from './FileUploader.module.css';
 
 interface FileUploaderProps {
   onFileUpload: (file: File) => Promise<void>;
@@ -24,24 +25,27 @@ const FileUploader: React.FC<FileUploaderProps> = ({
     }
   };
 
+  const getStatusClass = () => {
+    switch (importStatus.status) {
+      case 'error': return styles.error;
+      case 'success': return styles.success;
+      default: return styles.loading;
+    }
+  };
+
   return (
-    <div className="card">
+    <div className={styles.card}>
       <h3>📁 Загрузка данных</h3>
       <input
         type="file"
         accept=".csv,.parquet,.xlsx"
         onChange={handleFileChange}
         disabled={isLoading}
-        style={{ marginBottom: '10px' }}
+        className={styles.fileInput}
       />
      
       {importStatus.message && (
-        <div style={{ 
-          marginTop: '10px', 
-          fontWeight: 'bold',
-          color: importStatus.status === 'error' ? '#dc3545' : 
-                 importStatus.status === 'success' ? '#28a745' : '#007bff'
-        }}>
+        <div className={`${styles.statusMessage} ${getStatusClass()}`}>
           {importStatus.message}
         </div>
       )}

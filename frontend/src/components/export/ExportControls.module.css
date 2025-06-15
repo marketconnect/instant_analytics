@@ -1,0 +1,40 @@
+.card {
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  border: 1px solid #eaecf0;
+  margin-bottom: 20px;
+}
+
+.title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.noDataMessage {
+  color: var(--color-text-muted);
+  margin-bottom: 16px;
+}
+
+.buttonContainer {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.exportButton {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.exportButton.disabled {
+  opacity: 0.5;
+}
+
+.dataInfo {
+  margin-top: 12px;
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+} 

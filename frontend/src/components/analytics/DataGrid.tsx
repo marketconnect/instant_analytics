@@ -2,6 +2,7 @@ import React from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import { ModuleRegistry, AllCommunityModule } from 'ag-grid-community';
 import type { ColumnDef } from '../../types/analytics';
+import styles from './DataGrid.module.css';
 
 // Регистрируем все модули AG Grid Community
 ModuleRegistry.registerModules([AllCommunityModule]);
@@ -17,9 +18,9 @@ const DataGrid: React.FC<DataGridProps> = ({ data, columnDefs }) => {
   }
 
   return (
-    <div className="card">
+    <div className={styles.card}>
       <h3>📊 Результаты запроса ({data.length} строк)</h3>
-      <div className="ag-theme-alpine" style={{ height: 400, width: '100%' }}>
+      <div className={`ag-theme-alpine ${styles.gridContainer}`}>
         <AgGridReact
           rowData={data}
           columnDefs={columnDefs}

@@ -1,0 +1,209 @@
+.card {
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  border: 1px solid #eaecf0;
+  margin-bottom: 20px;
+}
+
+.cardTitle {
+  margin: 0 0 16px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #101828;
+  font-family: Inter, sans-serif;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.modeSelector {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 6px;
+  border: 1px solid #eaecf0;
+  background: white;
+  padding: 3px;
+  box-shadow: none;
+}
+
+.modeOption {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 400;
+  transition: all 0.15s ease;
+  font-family: Inter, sans-serif;
+  height: 24px;
+  box-sizing: border-box;
+  border: none;
+}
+
+.modeOption.sql {
+  background: #3395ff;
+  color: white;
+}
+
+.modeOption.ai {
+  background: #3395ff;
+  color: white;
+}
+
+.modeOption.inactive {
+  background: transparent;
+  color: #475467;
+}
+
+.modeOption.inactive:hover {
+  background: #f2f4f7;
+}
+
+.modeOptionInput {
+  display: none;
+}
+
+.historyContainer {
+  position: relative;
+}
+
+.historyButton {
+  padding: 6px 12px;
+  font-size: 12px;
+  border: 1px solid #eaecf0;
+  border-radius: 6px;
+  background-color: white;
+  color: #667085;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.historyDropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background-color: white;
+  border: 1px solid #eaecf0;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  min-width: 300px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.historyHeader {
+  padding: 8px 12px;
+  border-bottom: 1px solid #eaecf0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.historyTitle {
+  font-size: 12px;
+  font-weight: 500;
+  color: #101828;
+}
+
+.clearButton {
+  font-size: 10px;
+  color: #dc2626;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.historyEmpty {
+  padding: 16px 12px;
+  text-align: center;
+  color: #667085;
+  font-size: 12px;
+}
+
+.historyItem {
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  font-family: monospace;
+  color: #374151;
+  background-color: white;
+  transition: background-color 0.2s ease;
+}
+
+.historyItem:not(:last-child) {
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.historyItem:hover {
+  background-color: #f9fafb;
+}
+
+.textareaContainer {
+  margin-bottom: 12px;
+}
+
+.textarea {
+  width: 100%;
+  padding: 12px;
+  font-size: 14px;
+  border: 1px solid #eaecf0;
+  border-radius: 6px;
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.2s ease;
+  box-sizing: border-box;
+}
+
+.textarea:focus {
+  border-color: rgb(234, 236, 240);
+}
+
+.textarea.sql {
+  height: 80px;
+  font-family: monospace;
+}
+
+.textarea.ai {
+  height: 100px;
+  font-family: Inter, sans-serif;
+}
+
+.executeButton {
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.executeButton.enabled {
+  background-color: var(--color-primary-600);
+  color: white;
+}
+
+.executeButton.disabled {
+  background-color: #f3f4f6;
+  color: #9ca3af;
+  cursor: not-allowed;
+}
+
+.aiHint {
+  margin-top: 12px;
+  font-size: 12px;
+  color: #667085;
+} 

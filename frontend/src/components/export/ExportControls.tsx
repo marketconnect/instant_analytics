@@ -1,6 +1,7 @@
 import React from 'react';
 import { useData } from '../../contexts/DataContext';
 import { useLanguage } from '../../i18n/LanguageContext';
+import styles from './ExportControls.module.css';
 
 interface ExportControlsProps {
   data?: any[];
@@ -80,78 +81,50 @@ const ExportControls: React.FC<ExportControlsProps> = ({ data, disabled = false 
   );
 
   return (
-    <div className="card">
-      <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+    <div className={styles.card}>
+      <h3 className={styles.title}>
         <ExportIcon />
         {t('exportData')}
       </h3>
       
       {!hasData && (
-        <p style={{ color: 'var(--color-text-muted)', marginBottom: '16px' }}>
+        <p className={styles.noDataMessage}>
           {t('noDataToExport')}
         </p>
       )}
 
-      <div style={{ 
-        display: 'flex', 
-        gap: '12px', 
-        flexWrap: 'wrap' 
-      }}>
+      <div className={styles.buttonContainer}>
         <button
-          className={`btn ${hasData && !disabled ? 'btn-info' : ''}`}
+          className={`btn ${hasData && !disabled ? 'btn-info' : ''} ${styles.exportButton} ${(!hasData || disabled) ? styles.disabled : ''}`}
           onClick={() => handleExport('csv')}
           disabled={!hasData || disabled}
-          style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '8px',
-            opacity: (!hasData || disabled) ? 0.5 : 1
-          }}
         >
           <CsvIcon />
           {t('exportToCsv')}
         </button>
 
         <button
-          className={`btn ${hasData && !disabled ? 'btn-info' : ''}`}
+          className={`btn ${hasData && !disabled ? 'btn-info' : ''} ${styles.exportButton} ${(!hasData || disabled) ? styles.disabled : ''}`}
           onClick={() => handleExport('excel')}
           disabled={!hasData || disabled}
-          style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '8px',
-            opacity: (!hasData || disabled) ? 0.5 : 1
-          }}
         >
           <ExcelIcon />
           {t('exportToExcel')}
         </button>
 
         <button
-          className={`btn ${hasData && !disabled ? 'btn-info' : ''}`}
+          className={`btn ${hasData && !disabled ? 'btn-info' : ''} ${styles.exportButton} ${(!hasData || disabled) ? styles.disabled : ''}`}
           onClick={() => handleExport('parquet')}
           disabled={!hasData || disabled}
-          style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '8px',
-            opacity: (!hasData || disabled) ? 0.5 : 1
-          }}
         >
           <ParquetIcon />
           {t('exportToParquet')}
         </button>
 
         <button
-          className={`btn ${hasData && !disabled ? 'btn-info' : ''}`}
+          className={`btn ${hasData && !disabled ? 'btn-info' : ''} ${styles.exportButton} ${(!hasData || disabled) ? styles.disabled : ''}`}
           onClick={() => handleExport('json')}
           disabled={!hasData || disabled}
-          style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '8px',
-            opacity: (!hasData || disabled) ? 0.5 : 1
-          }}
         >
           <JsonIcon />
           JSON
@@ -159,11 +132,7 @@ const ExportControls: React.FC<ExportControlsProps> = ({ data, disabled = false 
       </div>
 
       {hasData && (
-        <div style={{ 
-          marginTop: '12px', 
-          fontSize: '0.875rem', 
-          color: 'var(--color-text-muted)' 
-        }}>
+        <div className={styles.dataInfo}>
           📊 {dataToExport.length.toLocaleString()} {t('rowCount').toLowerCase()} 
           {dataToExport.length > 0 && ` • ${Object.keys(dataToExport[0]).length} ${t('columns').toLowerCase()}`}
           <br />

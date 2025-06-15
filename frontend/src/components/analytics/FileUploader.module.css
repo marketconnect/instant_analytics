@@ -1,0 +1,28 @@
+.card {
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  border: 1px solid #eaecf0;
+  margin-bottom: 20px;
+}
+
+.fileInput {
+  margin-bottom: 10px;
+}
+
+.statusMessage {
+  margin-top: 10px;
+  font-weight: bold;
+}
+
+.statusMessage.error {
+  color: #dc3545;
+}
+
+.statusMessage.success {
+  color: #28a745;
+}
+
+.statusMessage.loading {
+  color: #007bff;
+} 

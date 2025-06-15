@@ -182,6 +182,12 @@ class DuckDBService {
     });
   }
 
+  // Отправка команды в worker
+  sendCommand(command: any): void {
+    console.log('DuckDBService отправляет команду в worker:', command);
+    this.worker.postMessage(command);
+  }
+
   // Очистка ресурсов
   destroy() {
     this.listeners.clear();

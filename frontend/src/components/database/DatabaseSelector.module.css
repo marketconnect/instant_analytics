@@ -1,0 +1,122 @@
+.card {
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  border: 1px solid #eaecf0;
+  margin-bottom: 20px;
+}
+
+.emptyMessage {
+  color: var(--color-text-muted);
+}
+
+.currentDatabaseInfo {
+  margin-bottom: 20px;
+  padding: 12px;
+  background: var(--color-bg-secondary);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+}
+
+.currentDatabaseName {
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--color-base-600);
+}
+
+.currentDatabaseDetails {
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+}
+
+.selectContainer {
+  margin-bottom: 20px;
+}
+
+.selectLabel {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: var(--color-base-600);
+}
+
+.select {
+  width: 100%;
+}
+
+.databaseInfoSection {
+  margin-top: 20px;
+}
+
+.databaseInfoTitle {
+  margin-bottom: 12px;
+  color: var(--color-base-600);
+}
+
+.databaseList {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.databaseItem {
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.databaseItem.selected {
+  background: #e0e7ff;
+  border: 2px solid #7c3aed;
+}
+
+.databaseItem.unselected {
+  background: var(--color-bg-tertiary);
+  border: 1px solid transparent;
+}
+
+.databaseItem.unselected:hover {
+  background: #f3f4f6;
+}
+
+.databaseContent {
+  flex: 1;
+}
+
+.databaseName {
+  margin-bottom: 4px;
+}
+
+.databaseName.selected {
+  font-weight: 600;
+  color: #7c3aed;
+}
+
+.databaseName.unselected {
+  font-weight: 500;
+}
+
+.databaseDetails {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.removeButton {
+  background: transparent;
+  border: none;
+  color: #dc2626;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 14px;
+  margin-left: 8px;
+  transition: background-color 0.2s ease;
+}
+
+.removeButton:hover {
+  background-color: #fee2e2;
+} 

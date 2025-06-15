@@ -1,16 +1,25 @@
 import React from 'react';
 import { useData } from '../../contexts/DataContext';
 import { useLanguage } from '../../i18n/LanguageContext';
+import styles from './DatabaseSelector.module.css';
 
 const DatabaseSelector: React.FC = () => {
-  const { databases, currentDatabase, selectDatabase } = useData();
+  const { databases, currentDatabase, selectDatabase, removeDatabase } = useData();
   const { t } = useLanguage();
+
+  const handleRemoveDatabase = (databaseId: string, event: React.MouseEvent) => {
+    event.stopPropagation(); // Предотвращаем выбор базы данных при клике на удаление
+    
+    if (confirm('Вы уверены, что хотите удалить эту базу данных из списка? Данные в DuckDB останутся, но информация о базе будет удалена.')) {
+      removeDatabase(databaseId);
+    }
+  };
 
   if (databases.length === 0) {
     return (
-      <div className="card">
+      <div className={styles.card}>
         <h3>{t('selectDatabase')}</h3>
-        <p style={{ color: 'var(--color-text-muted)' }}>
+        <p className={styles.emptyMessage}>
           {t('noDatabaseSelected')}
         </p>
       </div>
@@ -18,21 +27,15 @@ const DatabaseSelector: React.FC = () => {
   }
 
   return (
-    <div className="card">
+    <div className={styles.card}>
       <h3>{t('selectDatabase')}</h3>
       
       {currentDatabase && (
-        <div style={{ 
-          marginBottom: '20px', 
-          padding: '12px', 
-          background: 'var(--color-bg-secondary)', 
-          borderRadius: 'var(--radius-md)',
-          border: '1px solid var(--color-border)'
-        }}>
-          <div style={{ fontWeight: '600', marginBottom: '8px', color: 'var(--color-base-600)' }}>
+        <div className={styles.currentDatabaseInfo}>
+          <div className={styles.currentDatabaseName}>
             {t('currentDatabase')}: {currentDatabase.name}
           </div>
-          <div style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>
+          <div className={styles.currentDatabaseDetails}>
             {t('rowCount')}: {currentDatabase.rowCount.toLocaleString()} | 
             {' '}{t('columns')}: {currentDatabase.columns.length} |
             {' '}{t('uploadDate')}: {currentDatabase.uploadDate.toLocaleDateString()}
@@ -40,20 +43,14 @@ const DatabaseSelector: React.FC = () => {
         </div>
       )}
 
-      <div>
-        <label style={{ 
-          display: 'block', 
-          marginBottom: '8px', 
-          fontWeight: '500',
-          color: 'var(--color-base-600)'
-        }}>
+      <div className={styles.selectContainer}>
+        <label className={styles.selectLabel}>
           {t('loadedDatabases')}:
         </label>
         <select
           value={currentDatabase?.id || ''}
           onChange={(e) => selectDatabase(e.target.value)}
-          className="input-field"
-          style={{ width: '100%' }}
+          className={`input-field ${styles.select}`}
         >
           <option value="">{t('selectDatabase')}</option>
           {databases.map((db) => (
@@ -65,30 +62,32 @@ const DatabaseSelector: React.FC = () => {
       </div>
 
       {databases.length > 0 && (
-        <div style={{ marginTop: '20px' }}>
-          <h4 style={{ marginBottom: '12px', color: 'var(--color-base-600)' }}>
+        <div className={styles.databaseInfoSection}>
+          <h4 className={styles.databaseInfoTitle}>
             {t('databaseInfo')}
           </h4>
-          <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+          <div className={styles.databaseList}>
             {databases.map((db) => (
               <div 
                 key={db.id}
-                style={{
-                  padding: '8px 12px',
-                  marginBottom: '8px',
-                  background: db.id === currentDatabase?.id ? 'var(--color-accent)' : 'var(--color-bg-tertiary)',
-                  borderRadius: 'var(--radius-sm)',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease'
-                }}
+                className={`${styles.databaseItem} ${db.id === currentDatabase?.id ? styles.selected : styles.unselected}`}
                 onClick={() => selectDatabase(db.id)}
               >
-                <div style={{ fontWeight: '500', marginBottom: '4px' }}>
-                  {db.name}
+                <div className={styles.databaseContent}>
+                  <div className={`${styles.databaseName} ${db.id === currentDatabase?.id ? styles.selected : styles.unselected}`}>
+                    {db.id === currentDatabase?.id && '✓ '}{db.name}
+                  </div>
+                  <div className={styles.databaseDetails}>
+                    {db.fileName} • {db.rowCount.toLocaleString()} {t('rowCount').toLowerCase()} • {db.columns.length} {t('columns').toLowerCase()}
+                  </div>
                 </div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
-                  {db.fileName} • {db.rowCount.toLocaleString()} {t('rowCount').toLowerCase()} • {db.columns.length} {t('columns').toLowerCase()}
-                </div>
+                <button
+                  onClick={(e) => handleRemoveDatabase(db.id, e)}
+                  className={styles.removeButton}
+                  title="Удалить базу данных из списка"
+                >
+                  🗑️
+                </button>
               </div>
             ))}
           </div>

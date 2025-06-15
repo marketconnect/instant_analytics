@@ -274,13 +274,10 @@
 }
 
 .page-header {
-  position: sticky;
   top: 0;
   z-index: 100;
   background: var(--color-bg-primary);
   padding: var(--space-2xl) var(--space-2xl);
-  backdrop-filter: blur(8px);
-  min-height: 72px;
   display: flex;
   align-items: center;
 }

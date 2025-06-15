@@ -44,45 +44,6 @@ export const useAnalytics = () => {
     }
   }, [currentDatabase]);
 
-  // Обработка импорта файла
-  const handleFileUpload = useCallback(async (file: File) => {
-    const maxSize = 2 * 1024 * 1024 * 1024; // 2GB
-    
-    if (file.size > maxSize) {
-      const sizeGB = Math.round(file.size / 1024 / 1024 / 1024 * 100) / 100;
-      throw new Error(`Файл слишком большой (${sizeGB}GB). Максимальный размер: 2GB`);
-    }
-
-    setIsLoading(true);
-    setImportStatus({
-      status: 'loading',
-      message: '⏳ Загрузка файла...'
-    });
-
-    try {
-      const buffer = await file.arrayBuffer();
-      const result = await duckDBService.importFile(buffer, file.name);
-      
-      setImportStatus({
-        status: 'success',
-        message: `✅ ${result.message}`,
-        rows: result.rows,
-        type: result.type
-      });
-      
-      setFileImported(true);
-      
-    } catch (error) {
-      console.error('Import error:', error);
-      setImportStatus({
-        status: 'error',
-        message: `❌ Ошибка загрузки: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  }, [duckDBService]);
-
   // Выполнение SQL запроса
   const executeSQL = useCallback(async (query: string, checkFileImported = true) => {
     console.log('executeSQL вызван:', { query, checkFileImported, fileImported });
@@ -157,12 +118,58 @@ export const useAnalytics = () => {
     }
   }, [fileImported, duckDBService]);
 
-  // Автоматически выполняем запрос после импорта файла
+  // Обработчик загрузки файла
+  const handleFileUpload = useCallback(async (file: File) => {
+    console.log('handleFileUpload вызван для файла:', file.name);
+    setIsLoading(true);
+    setImportStatus({ status: 'loading', message: 'Загрузка файла...' });
+
+    try {
+      const buffer = await file.arrayBuffer();
+      const result = await duckDBService.importFile(buffer, file.name);
+      
+      setImportStatus({
+        status: 'success',
+        message: `✅ ${result.message}`,
+        rows: result.rows,
+        type: result.type
+      });
+      
+      console.log('Файл успешно загружен, устанавливаем fileImported = true');
+      setFileImported(true);
+      
+      // Выполняем запрос для получения данных и обновления информации о базе
+      setTimeout(async () => {
+        try {
+          await executeSQL('SELECT * FROM t LIMIT 20', false);
+        } catch (error) {
+          console.error('Ошибка при выполнении запроса после загрузки:', error);
+        }
+      }, 200);
+
+      // Возвращаем результат с информацией о количестве строк
+      return result;
+
+    } catch (error) {
+      console.error('Ошибка загрузки файла:', error);
+      setImportStatus({
+        status: 'error',
+        message: `❌ Ошибка загрузки: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`
+      });
+      setFileImported(false);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [duckDBService, executeSQL]);
+
+  // Автоматически выполняем запрос после импорта файла или восстановления базы данных
   useEffect(() => {
-    if (fileImported) {
+    if (fileImported && currentDatabase) {
+      console.log('useAnalytics: выполняем запрос для текущей базы данных:', currentDatabase.name);
       executeSQL('SELECT * FROM t LIMIT 20', false).catch(console.error);
     }
-  }, [fileImported, executeSQL]);
+  }, [fileImported, executeSQL, currentDatabase]);
 
   // Обновление настроек визуализации
   const updateVizSettings = useCallback((settings: Partial<VizSettings>) => {
@@ -185,16 +192,30 @@ export const useAnalytics = () => {
     const handleWorkerMessage = (data: any) => {
       console.log('useAnalytics: получено сообщение от worker:', data);
       
-      if (data.restored && data.rows > 0 && !fileImported) {
-        console.log('useAnalytics: получено сообщение о восстановлении данных:', data);
+      // Обработка восстановления множественных баз данных
+      if (data.restored && data.databases && Array.isArray(data.databases) && data.databases.length > 0 && !fileImported) {
+        console.log('useAnalytics: получено сообщение о восстановлении множественных баз данных:', data.databases.length);
         setFileImported(true);
         setImportStatus({
           status: 'success',
-          message: `✅ Данные восстановлены из локального хранилища: ${data.rows} строк`,
-          rows: data.rows,
-          type: 'Восстановленные данные'
+          message: `✅ Восстановлено ${data.databases.length} баз данных из локального хранилища`,
+          rows: data.databases.reduce((total: number, db: any) => total + (db.rowCount || 0), 0),
+          type: 'Восстановленные базы данных'
         });
-        console.log('useAnalytics: fileImported установлен в true');
+        console.log('useAnalytics: fileImported установлен в true для множественных баз данных');
+      }
+      
+      // Обработка импорта новой базы данных
+      if (data.imported && data.databaseInfo && !fileImported) {
+        console.log('useAnalytics: получено сообщение об импорте новой базы данных:', data.databaseInfo);
+        setFileImported(true);
+        setImportStatus({
+          status: 'success',
+          message: `✅ Импортирована база данных: ${data.databaseInfo.name} (${data.rows} строк)`,
+          rows: data.rows,
+          type: data.type
+        });
+        console.log('useAnalytics: fileImported установлен в true для новой базы данных');
       }
     };
     

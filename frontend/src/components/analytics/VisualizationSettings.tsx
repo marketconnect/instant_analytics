@@ -1,5 +1,6 @@
 import React from 'react';
 import type { VizSettings } from '../../types/analytics';
+import styles from './VisualizationSettings.module.css';
 
 interface VisualizationSettingsProps {
   settings: VizSettings;
@@ -17,32 +18,17 @@ const VisualizationSettings: React.FC<VisualizationSettingsProps> = ({
   }
 
   return (
-    <div className="card">
+    <div className={styles.card}>
       <h3>⚙️ Настройки визуализации</h3>
-      <div style={{ 
-        display: 'grid', 
-        gridTemplateColumns: '1fr 1fr 1fr', 
-        gap: '16px', 
-        marginBottom: '16px' 
-      }}>
-        <div>
-          <label style={{ 
-            display: 'block', 
-            marginBottom: '4px', 
-            fontWeight: '500' 
-          }}>
+      <div className={styles.settingsGrid}>
+        <div className={styles.fieldGroup}>
+          <label className={styles.label}>
             Ось X (горизонтальная):
           </label>
           <select 
             value={settings.xField} 
             onChange={(e) => onSettingsChange({ xField: e.target.value })}
-            style={{ 
-              width: '100%', 
-              padding: '8px', 
-              border: '1px solid #dee2e6', 
-              borderRadius: '6px',
-              fontSize: '14px'
-            }}
+            className={styles.select}
           >
             {availableFields.map(field => (
               <option key={field} value={field}>{field}</option>
@@ -50,24 +36,14 @@ const VisualizationSettings: React.FC<VisualizationSettingsProps> = ({
           </select>
         </div>
         
-        <div>
-          <label style={{ 
-            display: 'block', 
-            marginBottom: '4px', 
-            fontWeight: '500' 
-          }}>
+        <div className={styles.fieldGroup}>
+          <label className={styles.label}>
             Ось Y (вертикальная):
           </label>
           <select 
             value={settings.yField} 
             onChange={(e) => onSettingsChange({ yField: e.target.value })}
-            style={{ 
-              width: '100%', 
-              padding: '8px', 
-              border: '1px solid #dee2e6', 
-              borderRadius: '6px',
-              fontSize: '14px'
-            }}
+            className={styles.select}
           >
             {availableFields.map(field => (
               <option key={field} value={field}>{field}</option>
@@ -75,12 +51,8 @@ const VisualizationSettings: React.FC<VisualizationSettingsProps> = ({
           </select>
         </div>
         
-        <div>
-          <label style={{ 
-            display: 'block', 
-            marginBottom: '4px', 
-            fontWeight: '500' 
-          }}>
+        <div className={styles.fieldGroup}>
+          <label className={styles.label}>
             Тип графика:
           </label>
           <select 
@@ -88,13 +60,7 @@ const VisualizationSettings: React.FC<VisualizationSettingsProps> = ({
             onChange={(e) => onSettingsChange({ 
               chartType: e.target.value as VizSettings['chartType'] 
             })}
-            style={{ 
-              width: '100%', 
-              padding: '8px', 
-              border: '1px solid #dee2e6', 
-              borderRadius: '6px',
-              fontSize: '14px'
-            }}
+            className={styles.select}
           >
             <option value="auto">🤖 Авто</option>
             <option value="bar">📊 Столбцы</option>
@@ -105,7 +71,7 @@ const VisualizationSettings: React.FC<VisualizationSettingsProps> = ({
         </div>
       </div>
       
-      <div style={{ fontSize: '12px', color: '#6c757d' }}>
+      <div className={styles.hint}>
         💡 Совет: Для числовых данных лучше подходят линии и точки, для категориальных - столбцы
       </div>
     </div>

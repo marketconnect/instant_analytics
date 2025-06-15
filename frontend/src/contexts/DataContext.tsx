@@ -5,6 +5,7 @@ export interface DatabaseInfo {
   id: string;
   name: string;
   fileName: string;
+  tableName: string;
   uploadDate: Date;
   rowCount: number;
   columns: string[];
@@ -15,6 +16,12 @@ export interface QueryResult {
   data: any[];
   query: string;
   executionTime: number;
+}
+
+export interface FileMetadata {
+  rowCount: number;
+  columns: string[];
+  sampleData?: any[];
 }
 
 interface DataContextType {
@@ -28,7 +35,8 @@ interface DataContextType {
   error: string | null;
   
   // Методы
-  addDatabase: (file: File, data: any[]) => Promise<void>;
+  addDatabase: (file: File, metadata: FileMetadata) => Promise<void>;
+  removeDatabase: (databaseId: string) => void;
   selectDatabase: (databaseId: string) => void;
   setQueryResults: (results: QueryResult) => void;
   setLoading: (loading: boolean) => void;
@@ -52,40 +60,172 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Загружаем список баз данных из localStorage при инициализации
+  useEffect(() => {
+    const savedDatabases = localStorage.getItem('databases');
+    const savedCurrentDatabaseId = localStorage.getItem('currentDatabaseId');
+    
+    if (savedDatabases) {
+      try {
+        const parsedDatabases = JSON.parse(savedDatabases).map((db: any) => ({
+          ...db,
+          uploadDate: new Date(db.uploadDate) // Восстанавливаем Date объект
+        }));
+        console.log('DataContext: загружен список баз данных из localStorage:', parsedDatabases.length);
+        setDatabases(parsedDatabases);
+        
+        // Восстанавливаем текущую базу данных
+        if (savedCurrentDatabaseId && parsedDatabases.length > 0) {
+          const currentDb = parsedDatabases.find((db: DatabaseInfo) => db.id === savedCurrentDatabaseId);
+          if (currentDb) {
+            setCurrentDatabase(currentDb);
+            console.log('DataContext: восстановлена текущая база данных:', currentDb.name);
+          } else {
+            // Если сохраненная база не найдена, выбираем первую
+            setCurrentDatabase(parsedDatabases[0]);
+          }
+        }
+        
+        // Уведомляем worker о восстановленных базах данных
+        const duckDBService = getDuckDBService();
+        setTimeout(() => {
+          console.log('DataContext: уведомляем worker о восстановленных базах данных');
+          duckDBService.sendCommand({
+            action: 'restoreDatabases',
+            databases: parsedDatabases,
+            currentDatabaseId: savedCurrentDatabaseId || (parsedDatabases.length > 0 ? parsedDatabases[0].id : null)
+          });
+        }, 1000); // Даем время worker'у инициализироваться
+        
+      } catch (error) {
+        console.error('Ошибка при загрузке списка баз данных:', error);
+        localStorage.removeItem('databases');
+        localStorage.removeItem('currentDatabaseId');
+      }
+    }
+  }, []);
+
+  // Сохраняем список баз данных в localStorage при изменении
+  useEffect(() => {
+    if (databases.length > 0) {
+      localStorage.setItem('databases', JSON.stringify(databases));
+      console.log('DataContext: сохранен список баз данных в localStorage:', databases.length);
+    }
+  }, [databases]);
+
+  // Сохраняем текущую базу данных в localStorage при изменении
+  useEffect(() => {
+    if (currentDatabase) {
+      localStorage.setItem('currentDatabaseId', currentDatabase.id);
+      console.log('DataContext: сохранена текущая база данных в localStorage:', currentDatabase.name);
+    }
+  }, [currentDatabase]);
+
   // Обработка сообщений от DuckDB worker о восстановлении данных
   useEffect(() => {
     const duckDBService = getDuckDBService();
     
     const handleWorkerMessage = (data: any) => {
-      if (data.restored && data.rows > 0) {
-        console.log('DataContext: получено сообщение о восстановлении данных:', data);
+      console.log('DataContext: получено сообщение от worker:', data);
+      
+      // Обработка восстановления множественных баз данных
+      if (data.restored && data.databases && Array.isArray(data.databases)) {
+        console.log('DataContext: получено сообщение о восстановлении множественных баз данных:', data.databases.length);
         
-        // Создаем запись о восстановленной базе данных
-        const restoredDatabase: DatabaseInfo = {
-          id: 'restored_db',
-          name: 'Восстановленная база данных',
-          fileName: 'restored_data.db',
-          uploadDate: new Date(),
-          rowCount: data.rows,
-          columns: [] // Колонки будут определены при первом запросе
+        // Проверяем, есть ли уже базы данных в списке
+        setDatabases(prev => {
+          // Если уже есть базы данных, не перезаписываем их
+          if (prev.length > 0) {
+            console.log('DataContext: пропускаем восстановление, так как уже есть базы данных');
+            return prev;
+          }
+          
+          // Преобразуем данные из worker'а в формат DatabaseInfo
+          const restoredDatabases: DatabaseInfo[] = data.databases.map((db: any) => ({
+            id: db.id,
+            name: db.name,
+            fileName: db.fileName,
+            tableName: db.tableName || '',
+            uploadDate: new Date(db.uploadDate),
+            rowCount: db.rowCount,
+            columns: db.columns || []
+          }));
+          
+          console.log('DataContext: восстановлены базы данных:', restoredDatabases.length);
+          
+          // Устанавливаем текущую базу данных
+          if (data.currentDatabaseId && restoredDatabases.length > 0) {
+            const currentDb = restoredDatabases.find(db => db.id === data.currentDatabaseId);
+            if (currentDb) {
+              setCurrentDatabase(currentDb);
+              console.log('DataContext: установлена текущая база данных:', currentDb.name);
+            }
+          }
+          
+          return restoredDatabases;
+        });
+      }
+      
+      // Обработка импорта новой базы данных
+      if (data.imported && data.databaseInfo) {
+        console.log('DataContext: получено сообщение об импорте новой базы данных:', data.databaseInfo);
+        
+        const newDatabase: DatabaseInfo = {
+          id: data.databaseInfo.id,
+          name: data.databaseInfo.name,
+          fileName: data.databaseInfo.fileName,
+          uploadDate: new Date(data.databaseInfo.uploadDate),
+          rowCount: data.databaseInfo.rowCount,
+          columns: data.databaseInfo.columns || [],
+          tableName: data.databaseInfo.tableName || ''
         };
         
+        setDatabases(prev => [...prev, newDatabase]);
+        setCurrentDatabase(newDatabase);
+        console.log('DataContext: добавлена новая база данных:', newDatabase.name);
+      }
+      
+      // Обработка переключения базы данных
+      if (data.databaseSwitched && data.databaseInfo) {
+        console.log('DataContext: получено сообщение о переключении базы данных:', data.databaseInfo);
+        
+        const switchedDatabase: DatabaseInfo = {
+          id: data.databaseInfo.id,
+          name: data.databaseInfo.name,
+          fileName: data.databaseInfo.fileName,
+          uploadDate: new Date(data.databaseInfo.uploadDate),
+          rowCount: data.databaseInfo.rowCount,
+          columns: data.databaseInfo.columns || [],
+          tableName: data.databaseInfo.tableName || ''
+        };
+        
+        setCurrentDatabase(switchedDatabase);
+        console.log('DataContext: переключена база данных:', switchedDatabase.name);
+      }
+      
+      // Обработка обновления tableName в localStorage
+      if (data.updateLocalStorage && data.databaseId && data.tableName) {
+        console.log('DataContext: обновляем tableName в localStorage для базы:', data.databaseId, 'новый tableName:', data.tableName);
+        
         setDatabases(prev => {
-          // Проверяем, есть ли уже восстановленная база
-          const existingIndex = prev.findIndex(db => db.id === 'restored_db');
-          if (existingIndex >= 0) {
-            // Обновляем существующую запись
-            const updated = [...prev];
-            updated[existingIndex] = restoredDatabase;
-            return updated;
-          } else {
-            // Добавляем новую запись
-            return [restoredDatabase, ...prev];
-          }
+          const updated = prev.map(db => {
+            if (db.id === data.databaseId) {
+              return { ...db, tableName: data.tableName };
+            }
+            return db;
+          });
+          
+          // Сохраняем обновленные данные в localStorage
+          localStorage.setItem('databases', JSON.stringify(updated));
+          console.log('DataContext: tableName обновлен в localStorage');
+          
+          return updated;
         });
         
-        setCurrentDatabase(restoredDatabase);
-        console.log('DataContext: создана запись о восстановленной базе данных');
+        // Обновляем текущую базу данных если это она
+        if (currentDatabase?.id === data.databaseId) {
+          setCurrentDatabase(prev => prev ? { ...prev, tableName: data.tableName } : null);
+        }
       }
     };
     
@@ -98,30 +238,73 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     };
   }, []);
 
-  const addDatabase = useCallback(async (file: File, data: any[]) => {
-    const columns = data.length > 0 ? Object.keys(data[0]) : [];
+  const addDatabase = useCallback(async (file: File, metadata: FileMetadata) => {
+    // Добавляем timestamp к имени файла
+    const timestamp = new Date().toISOString().slice(0, 19).replace(/[:-]/g, '');
+    const baseName = file.name.replace(/\.[^/.]+$/, ""); // убираем расширение
+    
     const newDatabase: DatabaseInfo = {
-      id: `db_${Date.now()}`,
-      name: file.name.replace(/\.[^/.]+$/, ""), // убираем расширение
+      id: `db_${timestamp}`,
+      name: `${baseName} (${new Date().toLocaleString()})`,
       fileName: file.name,
       uploadDate: new Date(),
-      rowCount: data.length,
-      columns
+      rowCount: metadata.rowCount,
+      columns: metadata.columns,
+      tableName: ''
     };
+
+    console.log('DataContext: добавляем базу данных:', {
+      name: newDatabase.name,
+      rowCount: newDatabase.rowCount,
+      columnsCount: newDatabase.columns.length,
+      columns: newDatabase.columns.slice(0, 5) // показываем первые 5 колонок
+    });
 
     setDatabases(prev => [...prev, newDatabase]);
     setCurrentDatabase(newDatabase);
     
     // Сохраняем данные в sessionStorage для текущей сессии
-    sessionStorage.setItem(`database_${newDatabase.id}`, JSON.stringify(data));
+    sessionStorage.setItem(`database_${newDatabase.id}`, JSON.stringify(metadata.sampleData || []));
     
     return Promise.resolve();
   }, []);
 
+  const removeDatabase = useCallback((databaseId: string) => {
+    setDatabases(prev => {
+      const filtered = prev.filter(db => db.id !== databaseId);
+      console.log('DataContext: удалена база данных:', databaseId);
+      
+      // Если удаляемая база была текущей, выбираем другую
+      if (currentDatabase?.id === databaseId) {
+        const newCurrent = filtered.length > 0 ? filtered[0] : null;
+        setCurrentDatabase(newCurrent);
+        if (newCurrent) {
+          console.log('DataContext: выбрана новая текущая база данных:', newCurrent.name);
+        }
+      }
+      
+      return filtered;
+    });
+    
+    // Удаляем данные из sessionStorage
+    sessionStorage.removeItem(`database_${databaseId}`);
+  }, [currentDatabase]);
+
   const selectDatabase = useCallback((databaseId: string) => {
     const database = databases.find(db => db.id === databaseId);
     if (database) {
+      console.log('DataContext: переключение на базу данных:', database.name);
+      
+      // Отправляем команду переключения в worker
+      const duckDBService = getDuckDBService();
+      duckDBService.sendCommand({
+        action: 'switchDatabase',
+        databaseId: databaseId
+      });
+      
+      // Локально обновляем состояние (worker подтвердит переключение)
       setCurrentDatabase(database);
+      
       // Очищаем предыдущие результаты при смене БД
       setQueryResults(null);
       setError(null);
@@ -147,6 +330,11 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     setQueryResults(null);
     setError(null);
     setIsLoading(false);
+    
+    // Очищаем localStorage
+    localStorage.removeItem('databases');
+    localStorage.removeItem('currentDatabaseId');
+    
     // Очищаем sessionStorage
     Object.keys(sessionStorage).forEach(key => {
       if (key.startsWith('database_')) {
@@ -277,6 +465,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     isLoading,
     error,
     addDatabase,
+    removeDatabase,
     selectDatabase,
     setQueryResults: setQueryResultsCallback,
     setLoading: setLoadingCallback,

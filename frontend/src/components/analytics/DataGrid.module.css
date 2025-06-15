@@ -1,0 +1,12 @@
+.card {
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  border: 1px solid #eaecf0;
+  margin-bottom: 20px;
+}
+
+.gridContainer {
+  height: 400px;
+  width: 100%;
+} 
